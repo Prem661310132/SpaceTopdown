@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections;
 
 public class EnemyShip : MonoBehaviour
 {
@@ -8,10 +9,17 @@ public class EnemyShip : MonoBehaviour
     public float whiskerAngle = 25f;
     public float frontWhiskerLength = 4f;
     public float sideWhiskerLength = 2f;
-    public float separationRadius = 1.2f; // ป้องกันการชนกันเอง
+    public float separationRadius = 1.2f;
 
     private Vector2 velocity;
     private Transform player;
+
+    [Header("Shooting Settings")]
+    public GameObject bulletPrefab;  // Prefab กระสุน
+    public Transform firePoint;      // ตำแหน่งที่ยิง
+    public float bulletSpeed = 8f;   // ความเร็วกระสุน
+    public float fireRate = 1f;      // อัตราการยิง (กระสุนต่อวินาที)
+    private float nextFireTime = 0f; // เวลาที่สามารถยิงครั้งต่อไป
 
     void Start()
     {
@@ -26,9 +34,6 @@ public class EnemyShip : MonoBehaviour
         Vector2 avoidanceForce = Avoidance();
         Vector2 separationForce = SeparateFromOthers();
 
-        Debug.Log($"Avoidance Force: {avoidanceForce}");
-        Debug.Log($"Velocity Before: {velocity}");
-
         velocity += (pursueForce + avoidanceForce + separationForce) * Time.deltaTime;
         velocity = Vector2.ClampMagnitude(velocity, maxSpeed);
 
@@ -39,7 +44,30 @@ public class EnemyShip : MonoBehaviour
             float angle = Mathf.Atan2(velocity.y, velocity.x) * Mathf.Rad2Deg;
             transform.rotation = Quaternion.Euler(0, 0, angle);
         }
+
+        if (Time.time >= nextFireTime)
+        {
+            Shoot();
+            nextFireTime = Time.time + 1f / fireRate;
+        }
     }
+
+    void Shoot()
+    {
+        if (bulletPrefab == null || firePoint == null) return;
+
+        // ✅ ยิงกระสุนจากตำแหน่งของ firePoint ปัจจุบันของยานลำนั้นๆ
+        GameObject bullet = Instantiate(bulletPrefab, firePoint.position, firePoint.rotation);
+
+        Rigidbody2D rb = bullet.GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            rb.velocity = firePoint.right * bulletSpeed; // ✅ กระสุนเคลื่อนที่ไปข้างหน้า
+        }
+
+        Destroy(bullet, 3f); // ✅ ลบกระสุนอัตโนมัติหลัง 3 วินาที
+    }
+
 
     Vector2 Pursue(Vector2 targetPosition)
     {
@@ -56,7 +84,7 @@ public class EnemyShip : MonoBehaviour
     {
         Vector2 forward = velocity.normalized;
         Vector2 avoidanceForce = Vector2.zero;
-        Vector2 rayStart = (Vector2)transform.position; // ลองใช้จุดเริ่มต้นที่เป๊ะขึ้น
+        Vector2 rayStart = (Vector2)transform.position;
 
         int layerMask = LayerMask.GetMask("Asteroid");
         RaycastHit2D hitFront = Physics2D.Raycast(rayStart, forward, frontWhiskerLength, layerMask);
@@ -69,16 +97,13 @@ public class EnemyShip : MonoBehaviour
 
         if (isBlockedFront)
         {
-            Debug.Log("Front is block");
             if (!isBlockedLeft) avoidanceForce += (Vector2)(Quaternion.Euler(0, 0, 90) * forward);
             else if (!isBlockedRight) avoidanceForce += (Vector2)(Quaternion.Euler(0, 0, -90) * forward);
             else avoidanceForce -= forward;
         }
 
         if (isBlockedLeft) avoidanceForce += (Vector2)(Quaternion.Euler(0, 0, -90) * forward);
-        Debug.Log("Left is block");
         if (isBlockedRight) avoidanceForce += (Vector2)(Quaternion.Euler(0, 0, 90) * forward);
-        Debug.Log("Right is block");
 
         return avoidanceForce.normalized * (avoidanceStrength * 8);
     }
@@ -98,42 +123,39 @@ public class EnemyShip : MonoBehaviour
         bool isBlockedLeft = hitLeft.collider != null;
         bool isBlockedRight = hitRight.collider != null;
 
-        // ลดแรงหลบออกจากกันเพื่อให้ยังขยับได้
         float separationFactor = avoidanceStrength * 0.5f;
 
         if (isBlockedFront)
         {
             if (!isBlockedLeft) avoidanceForce += (Vector2)(Quaternion.Euler(0, 0, 90) * forward) * separationFactor;
             else if (!isBlockedRight) avoidanceForce += (Vector2)(Quaternion.Euler(0, 0, -90) * forward) * separationFactor;
-            else avoidanceForce -= forward * separationFactor * 0.5f; // ลดการดันถอยหลัง
+            else avoidanceForce -= forward * separationFactor * 0.5f;
         }
 
         if (isBlockedLeft) avoidanceForce += (Vector2)(Quaternion.Euler(0, 0, -90) * forward) * separationFactor;
         if (isBlockedRight) avoidanceForce += (Vector2)(Quaternion.Euler(0, 0, 90) * forward) * separationFactor;
 
-        return avoidanceForce; // ไม่ normalize ให้แรงยังมีน้ำหนัก
+        return avoidanceForce;
     }
+
     void OnDrawGizmos()
     {
-        if (!Application.isPlaying) return; // วาดเฉพาะตอนเล่นเกม
+        if (!Application.isPlaying) return;
 
         Gizmos.color = Color.red;
         Vector2 forward = velocity.normalized;
-        Vector2 rayStart = (Vector2)transform.position + forward * 0.5f;
+        Vector2 rayStart = (Vector2)transform.position;
 
-        // Raycast ด้านหน้า
         Gizmos.DrawLine(rayStart, rayStart + forward * frontWhiskerLength);
 
-        // Raycast ด้านซ้าย
+        Gizmos.color = Color.blue;
         Gizmos.DrawLine(rayStart, rayStart + (Vector2)(Quaternion.Euler(0, 0, whiskerAngle) * forward) * sideWhiskerLength);
 
-        // Raycast ด้านขวา
+        Gizmos.color = Color.green;
         Gizmos.DrawLine(rayStart, rayStart + (Vector2)(Quaternion.Euler(0, 0, -whiskerAngle) * forward) * sideWhiskerLength);
 
-        Gizmos.color = Color.blue; // ใช้สีน้ำเงินสำหรับ Raycast ศัตรู
-
-        Gizmos.DrawLine(rayStart, rayStart + forward * (frontWhiskerLength * 0.5f));
-        Gizmos.DrawLine(rayStart, rayStart + (Vector2)(Quaternion.Euler(0, 0, whiskerAngle) * forward) * (sideWhiskerLength * 0.5f));
-        Gizmos.DrawLine(rayStart, rayStart + (Vector2)(Quaternion.Euler(0, 0, -whiskerAngle) * forward) * (sideWhiskerLength * 0.5f));
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, separationRadius);
     }
+
 }
