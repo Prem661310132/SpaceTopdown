@@ -113,9 +113,6 @@ public class EnemyShip : MonoBehaviour
 
         return avoidanceForce; // ไม่ normalize ให้แรงยังมีน้ำหนัก
     }
-
-
-
     void OnDrawGizmos()
     {
         if (!Application.isPlaying) return; // วาดเฉพาะตอนเล่นเกม
@@ -138,7 +135,5 @@ public class EnemyShip : MonoBehaviour
         Gizmos.DrawLine(rayStart, rayStart + forward * (frontWhiskerLength * 0.5f));
         Gizmos.DrawLine(rayStart, rayStart + (Vector2)(Quaternion.Euler(0, 0, whiskerAngle) * forward) * (sideWhiskerLength * 0.5f));
         Gizmos.DrawLine(rayStart, rayStart + (Vector2)(Quaternion.Euler(0, 0, -whiskerAngle) * forward) * (sideWhiskerLength * 0.5f));
-
     }
-
 }
